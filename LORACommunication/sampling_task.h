@@ -4,10 +4,11 @@
 #include "arduino.h"
 
 
-#define SAMPLING_BATT_LOOPTIME  60
+#define SAMPLING_BATT_LOOPTIME  120
 
 #ifdef LORA
-#define SAMPLING_PAYG_LOOPTIME  120
+#define SAMPLING_PAYG_LOOPTIME  10800
+#define REJOIN_LOOPTIME			86400
 #endif // LORA
 
 #define SAMPLE_SIZE 19
@@ -24,6 +25,8 @@ uint8_t sampling_test(uint8_t *buffer);
 void lora_batt_sampling(void);
 
 void lora_payg_sampling(void);
+
+void lora_rejoin(void);
 #endif // LORA
 
 #endif // _SAMPLING_TASK

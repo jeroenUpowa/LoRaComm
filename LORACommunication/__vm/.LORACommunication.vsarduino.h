@@ -12,7 +12,6 @@
 
 #ifndef _VSARDUINO_H_
 #define _VSARDUINO_H_
-#define _DEBUG 1
 #define LORA
 #define F_CPU 48000000L
 #define ARDUINO 10802

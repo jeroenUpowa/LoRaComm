@@ -160,14 +160,14 @@ inline uint8_t send_command(const struct command *comm, uint8_t *databuff) {
 
 	// we did it, copy the data
 	memcpy(databuff, recv + comm->datapos, comm->datalen);
-	db_module(); db_print("got :");
-#ifdef _DEBUG
-	for (int i; i < comm->datalen; i++) {
-		Serial.print(" ");
-		Serial.print((byte)databuff[i], HEX);
-	}
-	db_println();
-#endif // _DEBUG
+//	db_module(); db_print("got :");
+//#ifdef _DEBUG
+//	for (int i; i < comm->datalen; i++) {
+//		Serial.print(" ");
+//		Serial.print((byte)databuff[i], HEX);
+//	}
+//	db_println();
+//#endif // _DEBUG
 	return 0;
 }
 
@@ -281,10 +281,10 @@ inline uint8_t get_special_data_from_box(uint8_t *buffer) {
 	buffer[16] = 'm';
 	buffer[17] = 'A';
 
-#ifdef _DEBUG
-	Serial.write(buffer, 18);
-	Serial.println();
-#endif // _DEBUG
+//#ifdef _DEBUG
+//	Serial.write(buffer, 18);
+//	Serial.println();
+//#endif // _DEBUG
 
 
 	return 0;
@@ -355,7 +355,12 @@ void lora_batt_sampling(void)
 	}
 	Serial1.end();
 
-	comm_start_report(SAMPLE_SIZE, 2); // 2 == batt sample
+	comm_status_code comm_code = comm_start_report(SAMPLE_SIZE, 2); // 2 == batt sample
+	if (comm_code != COMM_OK) {
+		comm_setup();
+		return;
+	}
+
 	comm_fill_report(buff, SAMPLE_SIZE);
 	uint8_t reply[50];
 	comm_send_report(reply);
@@ -372,7 +377,7 @@ void lora_payg_sampling(void)
 	Serial1.begin(38400);
 
 	// Get sample data
-	uint8_t buff[PAYG_SIZE];
+	uint8_t buff[PAYG_SIZE + 2];
 	uint8_t code = get_paygState_from_box(buff);
 
 	if (code != 0) { // Something wrong
@@ -381,6 +386,8 @@ void lora_payg_sampling(void)
 			buff[j] = 0;
 	}
 	Serial1.end();
+
+	buff[PAYG_SIZE - 1] = ((buff[PAYG_SIZE - 1] & 0x01) << 2) + ((buff[PAYG_SIZE] & 0x01) << 1) + (buff[PAYG_SIZE + 1] & 0x01);
 
 	comm_start_report(PAYG_SIZE, 3); // 3 == payg state sample
 	comm_fill_report(buff, PAYG_SIZE);
@@ -391,26 +398,40 @@ void lora_payg_sampling(void)
 	db("end");
 	delay(100);
 }
+
+void lora_rejoin(void)
+{
+	db("running lora_rejoin task");
+	comm_status_code comm = comm_setup();
+	while (comm != COMM_OK) {
+		db("rejoin - failed");
+		comm = comm_setup();
+	}
+}
 #endif
 
 uint8_t sampling_test(uint8_t *buffer)
 {
 	Serial1.begin(38400);
-	uint8_t id[14];
-	uint8_t code = get_opid_from_box(id);
-	for (int i = 0; i < 14; i++)
-		if (code == 0)
-			buffer[i] = id[i];
-		else
-			buffer[i] = 0;
+	
 
 	uint8_t sample[SAMPLE_SIZE];
-	code = code + get_data_from_box(sample);
-	for (int i = 0; i < SAMPLE_SIZE; i++)
+	uint8_t code = get_data_from_box(sample);
+	for (int i = 0; i < SAMPLE_SIZE; i++) {
 		if (code == 0)
-			buffer[i + 14] = sample[i];
+			buffer[i] = sample[i];
 		else
-			buffer[i + 14] = 0;
+			buffer[i] = 0;
+	}
+
+	uint8_t id[14];
+	code = code + get_opid_from_box(id);
+	for (int i = 0; i < 14; i++) {
+		if (code == 0)
+			buffer[i + SAMPLE_SIZE] = id[i];
+		else
+			buffer[i + SAMPLE_SIZE] = '0';
+	}
 
 	Serial1.end();
 	return code;

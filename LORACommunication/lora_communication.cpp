@@ -28,7 +28,7 @@ static const u1_t PROGMEM APPKEY[16] = { 0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x2
 void os_getDevKey(u1_t* buf) { memcpy_P(buf, APPKEY, 16); }
 
 //Set conection & TX timeout
-ostime_t JOIN_TIME = sec2osticks(60); // wait x secondes before timeout
+ostime_t JOIN_TIME = sec2osticks(500); // wait x secondes before timeout
 ostime_t TX_TIME = sec2osticks(120);
 
 // Pin mapping
@@ -92,8 +92,9 @@ void onEvent(ev_t ev) {
 		break;
 	case EV_TXCOMPLETE:
 		db_println("EV_TXCOMPLETE (includes waiting for RX windows)");
-		if (LMIC.txrxFlags & TXRX_ACK)
+		if (LMIC.txrxFlags & TXRX_ACK) {
 			db_println("Received ack");
+		}
 		if (LMIC.dataLen) {
 			db_print("Received ");
 			db_print(LMIC.dataLen);
@@ -124,25 +125,39 @@ void blinkfunc(osjob_t* job)
 enum comm_status_code comm_setup(void)
 {
 	db("comm setup");
+	isJoined = false;
 	// Configure pins
 	pinMode(LED_BUILTIN, OUTPUT);
 	pinMode(lmic_pins.rst, OUTPUT);
 	digitalWrite(LED_BUILTIN, HIGH);
 	
 	//Hard-resetting the radio
-	digitalWrite(lmic_pins.rst, LOW);
-	delay(2000);
-	digitalWrite(lmic_pins.rst, HIGH);
+//	digitalWrite(lmic_pins.rst, LOW);
+//	delay(2000);
+//	digitalWrite(lmic_pins.rst, HIGH);
 
 	// Starting OS
 	os_init();
 
-	db("Connecting to gateway...");
+//	db("Connecting to gateway...");
 	// Blink job
 	os_setCallback(&blinkjob, blinkfunc);
 
 	// Reset the MAC state. Session and pending data transfers will be discarded.
 	LMIC_reset();
+	LMIC_setClockError(MAX_CLOCK_ERROR * 1 / 100);
+	LMIC_setAdrMode(false);
+	LMIC_setDrTxpow(DR_SF12, 23);
+
+	LMIC_setupChannel(0, 868100000, DR_RANGE_MAP(DR_SF12, DR_SF12), BAND_CENTI);
+	LMIC_setupChannel(1, 868300000, DR_RANGE_MAP(DR_SF12, DR_SF12), BAND_CENTI);
+	LMIC_setupChannel(2, 868500000, DR_RANGE_MAP(DR_SF12, DR_SF12), BAND_CENTI);
+	LMIC_setupChannel(3, 867100000, DR_RANGE_MAP(DR_SF12, DR_SF12), BAND_CENTI);
+	LMIC_setupChannel(4, 867300000, DR_RANGE_MAP(DR_SF12, DR_SF12), BAND_CENTI);
+	LMIC_setupChannel(5, 867500000, DR_RANGE_MAP(DR_SF12, DR_SF12), BAND_CENTI);
+	LMIC_setupChannel(6, 867700000, DR_RANGE_MAP(DR_SF12, DR_SF12), BAND_CENTI);
+	LMIC_setupChannel(7, 867900000, DR_RANGE_MAP(DR_SF12, DR_SF12), BAND_CENTI);
+	LMIC_setupChannel(8, 868800000, DR_RANGE_MAP(DR_FSK, DR_FSK), BAND_MILLI);
 
 	LMIC_startJoining();
 
@@ -151,6 +166,9 @@ enum comm_status_code comm_setup(void)
 	{
 		os_runloop_once();
 	}
+
+	LMIC_setAdrMode(false);
+	LMIC_setDrTxpow(DR_SF12, 23);
 	
 	if (!isJoined) {
 		db("Connection timeout");
@@ -219,6 +237,8 @@ enum comm_status_code comm_fill_report(const uint8_t *buffer, int length)
 			payg_buffer[i] = buffer[index + i];
 		index += SAMPLE_SIZE;
 	}
+
+	return COMM_OK;
 }
 
 enum comm_status_code lora_send_packet(uint8_t *buffer, int length)
@@ -295,7 +315,7 @@ enum comm_status_code comm_send_report(uint8_t *buffer)
 
 enum comm_status_code comm_abort(void)
 {
-	Serial.println(F("Abort"));
+	db("Abort");
 	os_radio(RADIO_RST); // put radio to sleep
 	delay(2000);
 	digitalWrite(LED_BUILTIN, LOW);

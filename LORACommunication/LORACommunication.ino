@@ -3,7 +3,7 @@
 #include <SPI.h>
 
 #define VERSION    "1.0"
-#define DISTR_DATE "2017-09-18"
+#define DISTR_DATE "2017-09-22"
 
 
 #define DB_MODULE "Communication Module"
@@ -41,9 +41,17 @@ void setup()
 	db_wait();
 
 	db("comm setup - start");
-	while (comm_setup() != COMM_OK) {
+	comm_status_code comm = comm_setup();
+	while (comm != COMM_OK) {
 		db("comm setup - failed");
 		db("comm setup - retry");
+		for (int i = 0; i < 20; i++) {
+			digitalWrite(LED_BUILTIN, HIGH);
+			delay(10);
+			digitalWrite(LED_BUILTIN, LOW);
+			delay(10);
+		}
+		comm = comm_setup();
 	}
 
 	db("storage setup");
@@ -55,13 +63,16 @@ void setup()
 	db("reporting setup");
 	reporting_setup();
 
+
 	db("testing");
 	uint8_t code = do_tests();
-
+	
 	while (code != COMMENCE_REPORTING)
 	{
 		db("retest");
-		delay(10000);
+		for (int i = 0; i < 3; i++) {
+			delay(10000);
+		}
 		code = do_tests();
 	}
 	db("tests finished");
@@ -71,20 +82,22 @@ void setup()
 	delay(100);
 	sched_setup();
 
-#ifdef GSM
-	db("scheduler add task");
-	sched_add_task(sampling_task, SAMPLING_BATT_LOOPTIME, SAMPLING_BATT_LOOPTIME);
-	db("scheduler add task");
-	sched_add_task(reporting_task, REPORTING_LOOPTIME, REPORTING_LOOPTIME);
-#endif
-#ifdef LORA
-	db("scheduler add task");
+//#ifdef GSM
+//	db("scheduler add task");
+//	sched_add_task(sampling_task, SAMPLING_BATT_LOOPTIME, SAMPLING_BATT_LOOPTIME);
+//	db("scheduler add task");
+//	sched_add_task(reporting_task, REPORTING_LOOPTIME, REPORTING_LOOPTIME);
+//#endif
+//#ifdef LORA
+//	db("scheduler add task - batt sampling");
 	sched_add_task(lora_batt_sampling, SAMPLING_BATT_LOOPTIME, SAMPLING_BATT_LOOPTIME);
-	db("scheduler add task");
+//	db("scheduler add task - payg sampling");
 	sched_add_task(lora_payg_sampling, SAMPLING_PAYG_LOOPTIME, SAMPLING_PAYG_LOOPTIME);
-#endif
+//	db("scheduler add task - rejoin)
+	sched_add_task(lora_rejoin, REJOIN_LOOPTIME, REJOIN_LOOPTIME);
+//#endif
 
-	db("scheduler mainloop");
+//	db("scheduler mainloop");
 	delay(100);
 	sched_mainloop();
 }
@@ -98,24 +111,23 @@ uint8_t do_tests(void)
 {
 	uint8_t buffer[50];
 	uint8_t code = sampling_test(buffer);
-#ifdef _DEBUG
-	Serial.print("sampling test result: ");
+
+	db_print("sampling test result: ");
 	for (int i = 0; i < 33; i++) {
-		Serial.print(" ");
-		Serial.print(buffer[i], HEX);
+		db_print(" ");
+		db_print(buffer[i]);
 	}
-	Serial.println("");
-	Serial.println("Storage test");
-#endif // DEBUG
+	db_println("");
+	db_println("Storage test");
 
 	code = stor_test();
 	buffer[33] = code;
-#ifdef _DEBUG
-	if (code == 0)
+	if (code == 0) {
 		db("stor test success");
-	else
+	}
+	else {
 		db("stor test failed");
-#endif // _DEBUG
+	}
 
 	code = reporting_test(buffer, 34);
 	return code;
